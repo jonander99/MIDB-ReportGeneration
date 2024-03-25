@@ -1,0 +1,336 @@
+---
+title: "Creating Reports"
+author: "Jon Anderson"
+institute: University of Minnesota Morris
+date: 25-Mar-2024
+format:
+  revealjs: 
+    self-contained: true
+    slide-number: true
+    preview-links: auto
+---
+
+## Introduction
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+library(palmerpenguins)
+library(gtsummary)
+library(tidyverse)
+library(patchwork)
+```
+
+This presentation will show you examples of what you can do with Quarto and parameterized reporting. Presentation outline
+
+-   Quarto documents
+-   Quarto document using parameters
+-   Create series of html documents using terminal script
+-   Create similar output for several variables in a dataset
+-   Table creation: pros/cons
+-   References and code availability
+
+## Quarto Documents
+
+-   Quarto is an open-source scientific and technical publishing system that uses markdown to create documents in multiple languages.
+-   It can render most existing R Markdown files without modification, and can be used to create documents using Rstudio/R, Python, Julia, and Observable.
+-   Quarto can be used to create documents such as: Articles, Reports, Presentations, Websites, Blogs, Books, HTML, PDF, MS Word, and ePub.
+
+::: footer
+Learn more: [Quarto Homepage](https://quarto.org)
+:::
+
+## Quarto YAML Header
+
+-   This presentation is a qmd Quarto document - presentation variant.
+-   The document header sets definitions for use in entire document.
+-   The YAML header for this presentation looks like this:
+
+```{r}
+#| echo: true
+#| eval: false
+#| code-line-numbers: 2|3-5|6-10
+---
+title: "Creating Reports"   # Metadata
+author: "Jon Anderson"
+institute: University of Minnesota Morris
+date: 25-Mar-2024
+format:                     # Set format types
+  revealjs: 
+    self-contained: true
+    slide-number: true
+    preview-links: auto  
+---
+
+```
+
+## Quarto Parameters
+
+-   Can add parameters to your document YAML
+
+```{r}
+#| echo: true
+#| eval: false
+#| code-line-numbers: 2|8-10
+---
+title: "Automated Report Tables"
+author: "Statistics Student"
+format:
+  html:
+    self-contained: true
+    self-contained-math: true
+params:
+  species: "Adelie"
+  statsby: "Jon"
+---
+  
+```
+
+```{r}
+#| echo: false
+params <- list(
+  species = "Adelie",
+  statsby = "Jon"
+)
+```
+
+## Access parameters
+
+Parameter values can be defined in YAML `params` and/or later in document.
+
+. . .
+
+`params` object is a list.
+
+```{r}
+str(params)
+```
+
+. . .
+
+Access with `$` notation.
+
+```{r}
+#| echo: true
+params$species
+```
+
+. . .
+
+For inline code, enclose the expression in `` `r ` ``.
+
+```{r}
+#| echo: true
+#| eval: false
+These are results for `r params$species`, analyzed by `r params$statsby`.
+```
+
+These are results for `r params$species`, analyzed by `r params$statsby`.
+
+## Template qmd File
+
+Quarto (.qmd) file containing graph and table creation code.
+
+```{r}
+#| echo: true
+#| eval: false
+
+
+---
+title: "Automated Report Tables"
+author: "Statistics Student"
+format:
+  html:
+    self-contained: true
+    self-contained-math: true
+params:
+  species: "Adelie"
+---
+
+
+library(tidymodels)
+library(tidyverse)
+library(gtsummary)
+library(palmerpenguins)
+```
+
+## Execution From Terminal
+
+-   Suppose a template file called ReportTables.qmd contains a `species` parameter defined in the YAML header.
+-   The template makes a ggplot graph followed by a gtsummary table of a quantitative variable body weight.
+-   Execute a render command with a given species, pipe output to html file. The following command in the "Terminal" produces an html report for species "Gentoo".
+
+```{r}
+#| echo: true
+#| eval: false
+#| tidy: false
+quarto render ReportTables.qmd -P species:Gentoo --output Gentoo_report.html
+```
+
+# Iterate Across Data Subsets; Summarize a Variable
+
+## A Series of Report Output Files
+
+To generate a similar report for each species, execute this code in the "Terminal"
+
+```{r}
+#| echo: true
+#| eval: false
+params=("Adelie" "Chinstrap" "Gentoo")
+
+for n in "${params[@]}";
+do
+    quarto render ReportTables.qmd --output "$n.html" -P species:"$n" 
+done
+```
+
+## Single Report: Repeated Components
+
+Generate report inside document qmd file. Use a function to make a desired series of graphs; variable `penguin` contains species name in a string.
+
+```{r}
+#| echo: true
+#| eval: false
+render_Graph <- function(penguin){
+   penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+    ggplot(data=., mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+  labs(title = paste("Species:", penguin),
+       x = "Body Mass (grams)")
+}
+```
+
+## Repeated Execution
+
+Then execute your `render_Graph` function for all levels of species using `purrr` package `map` function:
+
+```{r}
+#| echo: true
+#| eval: false
+unique(penguins$species) %>%
+  as.character() %>%
+  purrr::map(render_Graph) 
+```
+
+## Single Report: Graph and Table
+
+Expand the `render_Graph` function to include table creation. Needs `gridExtra` and `patchwork` packages.
+
+```{r}
+#| echo: true
+#| eval: false
+render_Graph <- function(penguin){
+   p1 <- penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+    ggplot(data=., mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+  labs(title = paste("Species:", penguin),
+       x = "Body Mass (grams)")
+#
+  p2 <- 
+   penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+  dplyr::select(body_mass_g) %>%
+  dplyr::summarise(AvgBodMass= round(mean(body_mass_g), digits=2),
+                   SDBodMass = round(sd(body_mass_g), digits=2),
+                   n=n()) 
+#
+  p2a <- gridExtra::tableGrob(p2)
+p1 + p2a + patchwork::plot_layout(ncol=1)
+}
+```
+
+## Repeated Execution
+
+Then execute your `render_Graph` function for all levels of species using `purrr` package `map` function:
+
+```{r}
+#| echo: true
+#| eval: false
+unique(penguins$species) %>%
+  as.character() %>%
+  purrr::map(render_Graph) 
+```
+
+# Iterate Across Variables
+
+## Repeated Execution: Using map
+
+```{r}
+#| echo: true
+#| eval: false
+data(mtcars)
+cols <- c("mpg", "hp", "qsec")
+#
+dens_fun2 <- function(var_string) {
+  ggplot(mtcars, aes(x = .data[[var_string]])) +
+    geom_density() +
+    labs(x = var_string,
+         title = var_string)
+}
+
+cols %>% 
+  purrr::map(dens_fun2)
+```
+
+## Repeated Execution: Using map2
+
+```{r}
+#| echo: true
+#| eval: false
+dens_fun <- function(var, name) {
+  ggplot(penguins, mapping=aes(x = var)) +
+    geom_density() +
+    labs(x = name,
+         title = name)
+}
+penguins %>% 
+  dplyr::select(where(is.numeric)) %>% 
+  purrr::map2(.x=.,.y=names(.),dens_fun)
+  
+```
+
+# Concluding Remarks
+
+## Making Tables
+
+::: columns
+::: {.column style="width: 40%; font-size: 75%;"}
+
+- `gtsummary` makes great tables.
+- `gtsummary` tables do not combine with `ggplot` graphics easily; 
+- Table formats that can be handled by `tableGrob` in `gridExtra` package are more convenient. 
+- Quarto table cross-referencing uses the `label` argument in the code chunk options.
+
+:::
+
+::: {.column width="60%"}
+
+
+```{r}
+#| label: tbl-gtsumm
+#| tbl-cap: "Summary Stats Table"
+#| echo: true
+#| message: false
+#| warning: false
+penguins %>% dplyr::filter(species==params$species) %>%
+  dplyr::select(body_mass_g) %>%
+  tbl_summary(data=., 
+    label = list(body_mass_g ~ "Body Mass (grams)"),
+    statistic = list(all_continuous() ~ "{median} ({p25},{p75})"),
+    type = list(body_mass_g ~ "continuous")) %>%
+  modify_header(label ~ "**Variable**") %>%
+  bold_labels()
+
+```
+
+@tbl-gtsumm is a relatively simple table.
+:::
+:::
+
+## Concluding Remarks
+
+-   Code and examples available at github repo: [Github Repo](https://github.com/jonander99/MIDB-ReportGeneration)
+-   This is a work "in-progress"
