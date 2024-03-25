@@ -1,0 +1,69 @@
+---
+title: "Automated Report Tables"
+author: "Statistics Student"
+format:
+  html:
+    self-contained: true
+    self-contained-math: true
+params:
+  species: "Adelie"
+---
+
+
+
+```{r}
+#| echo: false
+#| message: false
+#| warning: false
+# this block loads R packages that may be needed for the analysis.
+library(tidymodels)
+library(tidyverse)
+library(gtsummary)
+library(palmerpenguins)
+```
+
+
+
+## Analysis Report
+
+This report describes the distribution of body mass for penguin species `r params$species`.
+
+```{r}
+#| echo: false
+penguins_filter <- penguins %>%
+  dplyr::filter(species == params$species, !is.na(body_mass_g)) 
+diff_rows <- nrow(penguins) - nrow(penguins_filter)
+```
+
+We have data on `r nrow(penguins)` penguins. Only
+`r nrow(penguins_filter)` are classified as species `r params$species`. 
+The distribution of these `r params$species` penguins 
+are shown below:
+
+```{r}
+#| echo: false
+ggplot(data=penguins_filter, mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+  labs(title = paste(params$species, "population"))
+```
+
+```{r}
+#| label: tbl-gtsumm
+#| tbl-cap: "Summary Stats Table"
+#| echo: false
+#| message: false
+#| warning: false
+penguins_filter %>%
+  dplyr::select(body_mass_g) %>%
+  tbl_summary(data=., 
+              label = list(body_mass_g ~ "Body Mass (grams)"),
+              statistic = list(all_continuous() ~ "{median} ({p25},{p75})"),
+              type = list(body_mass_g ~ "continuous")) %>%
+  modify_header(label ~ "**Variable**") %>%
+  bold_labels()
+
+```
+
+
+Summary statistics for distribution of the `r params$species` penguins 
+is shown in  @tbl-gtsumm .
