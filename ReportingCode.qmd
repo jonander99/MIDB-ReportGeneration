@@ -1,0 +1,163 @@
+---
+title: "Reporting Code Ideas"
+author: "Jon"
+format:
+  html:
+    self-contained: true
+    self-contained-math: true
+params:
+  species: "Adelie"
+---
+
+
+## Basic Report
+
+```{r}
+#| code-fold: true
+#| message: false
+#| warning: false
+# this block loads R packages that may be needed for the analysis.
+library(tidymodels)
+library(patchwork)
+library(tidyverse)
+library(gtsummary)
+library(palmerpenguins)
+```
+
+
+
+
+ 
+
+```{r}
+#| code-fold: true
+
+penguins_filter <- penguins %>%
+  dplyr::filter(species == params$species, !is.na(body_mass_g)) 
+diff_rows <- nrow(penguins) - nrow(penguins_filter)
+```
+
+We have data about `r nrow(penguins)` penguins. Only
+`r diff_rows` are classified as `r params$species`. 
+The distribution of the `r params$species` penguins 
+are shown below:
+
+```{r}
+#| echo: false
+ggplot(data=penguins_filter, mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+labs(title = paste(params$species, "population"))
+```
+
+## Terminal Command Line 
+```{r}
+#| echo: true
+#| eval: false
+
+quarto render ReportTables.qmd -P species:Gentoo --output Gentoo_report.html
+# or produce a series of html reports:
+params=("Adelie" "Chinstrap" "Gentoo")
+
+for n in "${params[@]}";
+do
+    quarto render ReportTables.qmd --output "$n.html" -P species:"$n" 
+done
+```
+
+## Repeated Graphics Across Subsets
+
+
+```{r}
+render_Graph <- function(penguin){
+    penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+    ggplot(data=., mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+  labs(title = paste("Species:", penguin))
+}
+```
+
+```{r}
+unique(penguins$species) %>%
+  as.character() %>%
+  purrr::map(render_Graph) 
+```
+
+## More Advanced Report
+
+```{r}
+render_Graph <- function(penguin){
+   p1 <- penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+    ggplot(data=., mapping=aes(x=body_mass_g)) +
+  geom_histogram(binwidth=60) +
+  labs(title = paste("Species:", penguin),
+       x = "Body Mass (grams)")
+#
+  p2 <- 
+   penguins %>% dplyr::filter(species == penguin, 
+                               !is.na(body_mass_g)) %>%
+  dplyr::select(body_mass_g) %>%
+  dplyr::summarise(AvgBodMass= round(mean(body_mass_g), digits=2),
+                   SDBodMass = round(sd(body_mass_g), digits=2),
+                   n=n()) 
+#
+  p2a <- gridExtra::tableGrob(p2)
+#
+text <- paste("penguins data set gives body mass measurements in grams",
+             "the species here is", penguin, sep = "\n")
+
+# Create a text grob
+tgrob <- ggpubr::text_grob(text, face = "italic", color = "steelblue")  
+#
+p1 + p2a + tgrob + plot_layout(ncol=1)
+}
+```
+
+```{r}
+unique(penguins$species) %>%
+  as.character() %>%
+  purrr::map(render_Graph) 
+```
+
+
+
+
+
+## Repeated Variables
+
+```{r}
+data(mtcars)
+cols <- c("mpg", "hp", "qsec")
+#
+dens_fun2 <- function(var_string) {
+  ggplot(mtcars, aes(x = .data[[var_string]])) +
+    geom_density() +
+    labs(x = var_string,
+         title = var_string)
+}
+
+cols %>% 
+  purrr::map(dens_fun2)
+```
+
+## Map across two lists/vectors
+
+```{r}
+#| warning: false
+dens_fun <- function(var, name) {
+  ggplot(penguins, aes(x = var)) +
+    geom_density() +
+    labs(x = name,
+         title = name)
+}
+penguins %>% 
+  select(where(is.numeric)) %>% 
+  purrr::map2(.x=.,.y=names(.),dens_fun)
+  
+```
+
+
+
+
+
